@@ -35,18 +35,21 @@ int main(int argc, char **argv)
 	pid_t pid;
 	int mode;
 	int cmd_in, cmd_out;
-	struct pipe_i p;
-	int std_in, std_out, std_err;
+	struct pipe_i pipe_out, pipe_err;
+	int std_in, std_out, std_err;  /* */
 
 	init(NULL);
+	std_in  = STDIN_FILENO;
+	std_out = STDOUT_FILENO;
+	std_err = STDERR_FILENO;
+
 	while(11 == 11)
 	{
-		prev_mode = -1;
 		fprintf(stdout, "%% ");
 
 		while(11 == 11)
 		{
-			if((mode = cmd(&in, &out)) == EOF)
+			if((mode = cmd(&cmd_in, &cmd_out)) == EOF)
 				goto EXIT;
 
 /* fprintf(stdout, "[DEBUG] mode = %d \n", mode); */
@@ -81,39 +84,49 @@ while(*argp != NULL)
 			}
 			else  /* Normal command */
 			{
-				if(prev_mode == '|')
-					in = p.rd;
-
 				if(mode == '|')
 				{
-					if(pipe((int *)&p) == -1)
+					if(pipe((int *)&pipe_out) == -1)
 						perror("pipe");
 
-					out = p.wr;
+					std_out = pipe_out.wr;
+					/* check cmd_out */
 				}
 
-/*
-fprintf(stderr, "[DEBUG] prev_mode = %c, mode = %c\n", prev_mode, mode);
-fprintf(stderr, "[DEBUG] p.rd = %d, p.wr = %d\n", p.rd, p.wr);
-fprintf(stderr, "[DEBUG] in = %d, out = %d\n", in, out);
-*/
+//fprintf(stderr, "[DEBUG] mode = %c\n", mode);
+fprintf(stderr, "[DEBUG] pipe_out.rd = %d, pipe_out.wr = %d\n", pipe_out.rd, pipe_out.wr);
+//fprintf(stderr, "[DEBUG] std_in = %d, std_out = %d, std_err = %d\n", std_in, std_out, std_err);
 				if((pid = fork()) == 0)  /* Child process */
 				{
 /*
 fprintf(stderr, "[CHILD] forked\n");
 */
 					if(mode == '|')  /* ...  */
-						close(p.rd);
+						close(pipe_out.rd);
 
-					if(dup2(in, STDIN_FILENO) == -1)
-						perror("dup2");
-					if(in != STDIN_FILENO)
-						close(in);
+					if(std_in != STDIN_FILENO)
+					{
+						if(dup2(std_in, STDIN_FILENO) == -1)
+							perror("dup2 (std_in)");
 
-					if(dup2(out, STDOUT_FILENO) == -1)
-						perror("dup2");
-					if(out != STDOUT_FILENO)
-						close(out);
+						close(std_in);
+					}
+
+					if(std_out != STDOUT_FILENO)
+					{
+						if(dup2(std_out, STDOUT_FILENO) == -1)
+							perror("dup2 (std_out)");
+
+						close(std_out);
+					}
+
+					if(std_err != STDERR_FILENO)
+					{
+						if(dup2(std_err, STDERR_FILENO) == -1)
+							perror("dup2 (std_err)");
+
+						close(std_err);
+					}
 
 					if(execvp(exec_argv[0], exec_argv) == -1)
 					{
@@ -128,25 +141,34 @@ fprintf(stderr, "[CHILD] forked\n");
 fprintf(stderr, "[PARENT] forked\n");
 */
 					if(mode == '|')
-						close(p.wr);
+						close(pipe_out.wr);
 
-					if(prev_mode == '|')
-						close(in);
+					if(std_in != STDIN_FILENO)
+						close(std_in);
 
-					if(mode == '\n')
+					/************* FOR NEXT EXECUTION *************/
+
+					std_in  = STDIN_FILENO;
+					std_out = STDOUT_FILENO;
+					std_err = STDERR_FILENO;
+
+					if(mode == '|')  /* Prepare the fd of stdin for the next cmd */
+						std_in = pipe_out.rd;
+
+					if(mode == '\n')  /* END */
 					{
 						waitpid(pid, NULL, 0);
 						while(waitpid(-1, NULL, WNOHANG) > 0)
 						{
 						}
 
+						free_cmd();
 						break;
 					}
 				}
 			}
 
 			free_cmd();
-			prev_mode = mode;
 		}
 	}
 EXIT:
