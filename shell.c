@@ -37,6 +37,7 @@ int main(int argc, char **argv)
 	int cmd_in, cmd_out;
 	struct pipe_i pipe_out, pipe_err;
 	int std_in, std_out, std_err;  /* */
+	int skip_n;
 
 	init(NULL);
 	std_in  = STDIN_FILENO;
@@ -49,7 +50,7 @@ int main(int argc, char **argv)
 
 		while(11 == 11)
 		{
-			if((mode = cmd(&cmd_in, &cmd_out)) == EOF)
+			if((mode = cmd(&cmd_in, &cmd_out, &skip_n)) == EOF)
 				goto EXIT;
 
 /* fprintf(stdout, "[DEBUG] mode = %d \n", mode); */
@@ -69,7 +70,6 @@ while(*argp != NULL)
 			{
 				printenv(exec_argv[1]);
 
-				free_cmd();
 				break;
 			}
 			else if(strcmp(exec_argv[0], "setenv") == 0)
@@ -79,7 +79,6 @@ while(*argp != NULL)
 				else
 					_setenv(exec_argv[1], exec_argv[2]);
 
-				free_cmd();
 				break;
 			}
 			else  /* Normal command */
@@ -87,15 +86,22 @@ while(*argp != NULL)
 				if(mode == '|')
 				{
 					if(pipe((int *)&pipe_out) == -1)
-						perror("pipe");
+						perror("pipe (std_out)");
 
 					std_out = pipe_out.wr;
 					/* check cmd_out */
 				}
 
-//fprintf(stderr, "[DEBUG] mode = %c\n", mode);
+				if(cmd_in != STDIN_FILENO)
+					std_in = cmd_in;  /* check pipe settings */
+				if(cmd_out != STDOUT_FILENO)
+					std_out = cmd_out;  /* L92 */
+
+/*
+fprintf(stderr, "[DEBUG] mode = %c\n", mode);
 fprintf(stderr, "[DEBUG] pipe_out.rd = %d, pipe_out.wr = %d\n", pipe_out.rd, pipe_out.wr);
-//fprintf(stderr, "[DEBUG] std_in = %d, std_out = %d, std_err = %d\n", std_in, std_out, std_err);
+fprintf(stderr, "[DEBUG] std_in = %d, std_out = %d, std_err = %d\n", std_in, std_out, std_err);
+*/
 				if((pid = fork()) == 0)  /* Child process */
 				{
 /*
@@ -140,7 +146,7 @@ fprintf(stderr, "[CHILD] forked\n");
 /*
 fprintf(stderr, "[PARENT] forked\n");
 */
-					if(mode == '|')
+					if(mode == '|')  /* equivalent to close(std_out); */
 						close(pipe_out.wr);
 
 					if(std_in != STDIN_FILENO)
@@ -153,7 +159,58 @@ fprintf(stderr, "[PARENT] forked\n");
 					std_err = STDERR_FILENO;
 
 					if(mode == '|')  /* Prepare the fd of stdin for the next cmd */
+					{
 						std_in = pipe_out.rd;
+
+						if(skip_n != 0)  /* TODO: Eliminate some redundent code */
+						{
+							if(pipe((int *)&pipe_out) == -1)
+								perror("[clone] pipe (pipe_out)");
+
+							/* std_out = pipe_out.wr; */
+
+/*
+							if(pipe((int *)&pipe_err) == -1)
+								perror("pipe (std_err)");
+
+							std_err = pipe_err.wr;
+*/
+
+							if(fork() == 0)
+							{
+								close(pipe_out.rd);
+/*
+								close(pipe_err.rd);
+*/
+								if(dup2(std_in, STDIN_FILENO) == -1)
+									perror("[clone] dup2 (std_in)");
+								close(std_in);
+
+								if(dup2(pipe_out.wr, STDOUT_FILENO) == -1)
+									perror("[clone] dup2 (pipe_out)");
+
+								close(pipe_out.wr);
+/*
+								if(dup2(pipe_err.wr, STDERR_FILENO) == -1)
+									perror("dup2 (pipe_err)");
+
+								close(pipe_err.wr);
+*/
+							
+								execlp("clone", "clone", NULL);
+							}
+							else
+							{
+								close(pipe_out.wr);
+/*
+								close(pipe_err.wr);
+*/
+
+								close(std_in);
+								std_in = pipe_out.rd;
+							}
+						}
+					}
 
 					if(mode == '\n')  /* END */
 					{
@@ -162,7 +219,6 @@ fprintf(stderr, "[PARENT] forked\n");
 						{
 						}
 
-						free_cmd();
 						break;
 					}
 				}
@@ -170,6 +226,7 @@ fprintf(stderr, "[PARENT] forked\n");
 
 			free_cmd();
 		}
+		free_cmd();
 	}
 EXIT:
 	fprintf(stdout, "\n");

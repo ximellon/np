@@ -1,8 +1,12 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <ctype.h>
 #include "cmd.h"
 
 static char **exec_argv;
 
-int cmd(int *i_fd, int *o_fd)
+int cmd(int *i_fd, int *o_fd, int *skip_n)
 {
 	char c;
 	char *buf;
@@ -11,6 +15,7 @@ int cmd(int *i_fd, int *o_fd)
 
 	*i_fd = 0;
 	*o_fd = 1;
+	*skip_n = 0;
 
 	exec_argv = malloc(sizeof(char*) * DEFAULT_EXEC_ARGC);
 	while(11 == 11)
@@ -27,6 +32,10 @@ int cmd(int *i_fd, int *o_fd)
 		else if(c == '|')
 		{
 //			return '|';
+			while(isdigit(c = getchar()) != 0)
+				*skip_n = *skip_n * 10 + c - '0';
+			ungetc(c, stdin);
+			c = '|'; /* Fix return value case switch */
 
 			break;
 		}
@@ -51,7 +60,7 @@ int cmd(int *i_fd, int *o_fd)
 
 			if((*o_fd = open(buf, flag, 0666)) < 0)
 			{
-				perror("open");
+				perror("open (redir output file)");
 
 				/* error recovery */
 			}
@@ -68,7 +77,7 @@ int cmd(int *i_fd, int *o_fd)
 
 			if((*i_fd = open(buf, O_RDONLY)) < 0)
 			{
-				perror("open");
+				perror("open (redir input file)");
 
 				/* error recovery */
 			}
@@ -103,6 +112,12 @@ int cmd(int *i_fd, int *o_fd)
 	switch(c)
 	{
 		case '|':
+/*
+			if(*skip_n == 0)
+				return c;
+			else
+				return EXT_PIPE_MODE;
+*/
 		case '\n':
 			return c;
 		default:
