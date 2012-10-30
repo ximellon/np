@@ -66,3 +66,8 @@ fprintf(stderr, "entry_idx_max = %d\n", entry_idx_max);
 
 	return 0;
 }
+
+unsigned get_pipe_n_max(void)
+{
+	return entry_idx_max;
+}
