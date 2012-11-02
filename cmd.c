@@ -27,7 +27,7 @@ int cmd(int *i_fd, int *o_fd, int *skip_n)
 			return EOF;
 		}
 
-		if(c == ' ')
+		if(c == ' ' || c == '\r')
 			continue;
 		else if(c == '|')
 		{
@@ -137,11 +137,15 @@ char* arg(char *buf, unsigned len)
 
 		if(c == ' ')
 			break;
-		if(c == '\n')
+		else if(c == '\n')
 		{
 			ungetc(c, stdin);
 
 			break;
+		}
+		else if(c == '\r')
+		{
+			continue;
 		}
 		else
 		{

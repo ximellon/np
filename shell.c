@@ -49,11 +49,17 @@ int main(int argc, char **argv)
 	while(11 == 11)
 	{
 		fprintf(stdout, "%% ");
+fflush(stdout);
 
 		while(11 == 11)
 		{
 			if((mode = cmd(&cmd_in, &cmd_out, &skip_n)) == EOF)
+			{
+				fprintf(stdout, "\n");
+fflush(stdout);
+
 				goto EXIT;
+			}
 
 /* fprintf(stdout, "[DEBUG] mode = %d \n", mode); */
 			exec_argv = get_cmd_argv();
@@ -76,12 +82,28 @@ while(*argp != NULL)
 			}
 			else if(strcmp(exec_argv[0], "setenv") == 0)
 			{
-				if(exec_argv[2] == NULL)
-					_setenv(exec_argv[1], "");
+				if(exec_argv[1] != NULL)
+					if(exec_argv[2] == NULL)
+						_setenv(exec_argv[1], "");
+					else
+						_setenv(exec_argv[1], exec_argv[2]);
 				else
-					_setenv(exec_argv[1], exec_argv[2]);
+				{
+					fprintf(stdout, "usage\n");
+					fflush(stdout);
+				}
 
 				break;
+			}
+			else if(strcmp(exec_argv[0], "exit") == 0)
+			{
+				if(exec_argv[1] != NULL)
+				{
+					fprintf(stdout, "usage\n");
+					fflush(stdout);
+				}
+				else
+					goto EXIT;
 			}
 			else  /* Normal command */
 			{
@@ -323,7 +345,6 @@ fprintf(stderr, "i = %d, j = %d\n", i, j);
 		free_cmd();
 	}
 EXIT:
-	fprintf(stdout, "\n");
 
 	return 0;
 }
@@ -334,7 +355,10 @@ void env(void)
 	char **envp = environ;
 
 	while(*envp != NULL)
+	{
 		fprintf(stdout, "%s\n", *envp++);
+fflush(stdout);
+	}
 	
 	return;
 }
@@ -374,7 +398,10 @@ void printenv(char *var)
 	else
 	{
 		if((ptr = getenv(var)) != NULL)
+		{
 			fprintf(stdout, "%s\n", ptr);
+fflush(stdout);
+		}
 	}
 	
 	return;
