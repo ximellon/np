@@ -207,7 +207,12 @@ fprintf(stderr, "[PARENT] forked\n");
 
 								close(pipe_err.wr);
 							
-								execlp("clone", "clone", NULL);
+								if(execlp("clone", "clone", NULL) == -1)
+								{
+									perror("execlp");
+
+									exit(EXIT_FAILURE);
+								}
 							}
 							else
 							{
